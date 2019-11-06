@@ -1,24 +1,9 @@
 <?php
-/*
- * Copyright (C) 2015 Andy Pieters <andy@pay.nl>
- *
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation, either version 3 of the License, or
- * (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
- */
 
 namespace Paynl\Api\Transaction;
 
 use Paynl\Error;
+use Paynl\Helper;
 
 /**
  * Api class to refund a transaction
@@ -28,7 +13,8 @@ use Paynl\Error;
 class Refund extends Transaction
 {
     protected $apiTokenRequired = true;
-    protected $serviceIdRequired = false;
+
+    protected $version = 11;
 
     /**
      * @var string the transactionId
@@ -43,26 +29,10 @@ class Refund extends Transaction
      * @var string the description for this refund
      */
     private $description;
-
     /**
-     * Get data to send to the api
-     *
-     * @return array
-     * @throws Error\Required
+     * @var \DateTime the date the refund should take place
      */
-    protected function getData()
-    {
-        if (empty($this->transactionId)) {
-            throw new Error\Required('TransactionId is niet geset');
-        }
-        $this->data['transactionId'] = $this->transactionId;
-
-        if (!empty($this->amount)) {
-            $this->data['amount'] = $this->amount;
-        }
-
-        return parent::getData();
-    }
+    private $processDate;
 
     /**
      * @param string $transactionId
@@ -89,9 +59,63 @@ class Refund extends Transaction
     }
 
     /**
-     * @param null $endpoint
-     * @param null $version
+     * @param \DateTime $processDate
+     */
+    public function setProcessDate(\DateTime $processDate)
+    {
+        $this->processDate = $processDate;
+    }
+
+    /**
+     * @inheritdoc
+     * @throws Error\Required TransactionId is required
+     */
+    protected function getData()
+    {
+        if (empty($this->transactionId)) {
+            throw new Error\Required('TransactionId is required');
+        }
+
+        $this->data['transactionId'] = $this->transactionId;
+
+        if (!empty($this->amount)) {
+            $this->data['amount'] = $this->amount;
+        }
+        if (!empty($this->description)) {
+            $this->data['description'] = $this->description;
+        }
+        if ($this->processDate instanceof \DateTime) {
+            $this->data['processDate'] = $this->processDate->format('d-m-Y');
+        }
+
+        return parent::getData();
+    }
+
+    /**
+     * @param object|array $result
+     *
      * @return array
+     * @throws Error\Api
+     */
+    protected function processResult($result)
+    {
+        $output = Helper::objectToArray($result);
+
+        if (!is_array($output)) {
+            throw new Error\Api($output);
+        }
+
+        if (
+            isset($output['request']) &&
+            $output['request']['result'] != 1 &&
+            $output['request']['result'] !== 'TRUE') {
+            throw new Error\Api($output['request']['errorId'] . ' - ' . $output['request']['errorMessage']. ' '. (isset($output['description']) ? $output['description'] : ''));
+        }
+
+        return parent::processResult($result);
+    }
+    /**
+     * @inheritdoc
      */
     public function doRequest($endpoint = null, $version = null)
     {

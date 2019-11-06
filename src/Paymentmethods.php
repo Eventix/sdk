@@ -1,20 +1,4 @@
 <?php
-/*
- * Copyright (C) 2015 Andy Pieters <andy@andypieters.nl>
- *
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation, either version 3 of the License, or
- * (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
- */
 
 namespace Paynl;
 
@@ -38,31 +22,37 @@ class Paymentmethods
     {
         $paymentMethods = array();
 
-        foreach ($input['countryOptionList'] as $country) {
-            foreach ($country['paymentOptionList'] as $paymentOption) {
+        $basePath = $input['service']['basePath'];
+
+        foreach ((array)$input['countryOptionList'] as $country) {
+            foreach ((array)$country['paymentOptionList'] as $paymentOption) {
                 if (isset($paymentMethods[$paymentOption['id']])) {
                     $paymentMethods[$paymentOption['id']]['countries'][] = $country['id'];
-                } else {
-                    $banks = array();
-                    if (!empty($paymentOption['paymentOptionSubList'])) {
-                        foreach ($paymentOption['paymentOptionSubList'] as $optionSub) {
-                            $bank = array();
-                            $bank['id'] = $optionSub['id'];
-                            $bank['name'] = $optionSub['name'];
-                            $bank['visibleName'] = $optionSub['visibleName'];
-                            $banks[] = $bank;
-                        }
-                    }
-
-                    $paymentMethod = array(
-                        'id' => $paymentOption['id'],
-                        'name' => $paymentOption['name'],
-                        'visibleName' => $paymentOption['visibleName'],
-                        'countries' => array($country['id']),
-                        'banks' => $banks,
-                    );
-                    $paymentMethods[$paymentOption['id']] = $paymentMethod;
+                    continue;
                 }
+
+                $banks = array();
+                if (!empty($paymentOption['paymentOptionSubList'])) {
+                    foreach ((array)$paymentOption['paymentOptionSubList'] as $optionSub) {
+                        $image = '';
+                        if ($paymentOption['id'] == 10) {// only add images for ideal, because the rest will not have images
+                            $image = $basePath.$optionSub['path'].$optionSub['img'];
+                        }
+                        $banks[] = array(
+                          'id' => $optionSub['id'],
+                          'name' => $optionSub['name'],
+                          'visibleName' => $optionSub['visibleName'],
+                          'image' => $image,
+                        );
+                    }
+                }
+                $paymentMethods[$paymentOption['id']] = array(
+                  'id' => $paymentOption['id'],
+                  'name' => $paymentOption['name'],
+                  'visibleName' => $paymentOption['visibleName'],
+                  'countries' => array($country['id']),
+                  'banks' => $banks,
+                );
             }
         }
 
@@ -80,8 +70,8 @@ class Paymentmethods
     {
         $output = array();
         foreach ($paymentMethods as $paymentMethod) {
-            if (in_array($country, $paymentMethod['countries']) || in_array('ALL',
-                    $paymentMethod['countries'])
+            if (in_array($country, $paymentMethod['countries'], true)
+              || in_array('ALL', $paymentMethod['countries'], true)
             ) {
                 $output[] = $paymentMethod;
             }
@@ -92,18 +82,17 @@ class Paymentmethods
     /**
      * Get a list of available payment methods
      *
-     * @param array|null $options
+     * @param array $options
      * @return array
      */
-    public static function getList($options = array())
+    public static function getList(array $options = array())
     {
         $api = new Api\GetService();
         $result = $api->doRequest();
         $paymentMethods = self::reorderOutput($result);
 
         if (isset($options['country'])) {
-            $paymentMethods = self::filterCountry($paymentMethods,
-                $options['country']);
+            $paymentMethods = self::filterCountry($paymentMethods, $options['country']);
         }
 
         return $paymentMethods;
@@ -122,6 +111,5 @@ class Paymentmethods
             return $paymentMethods[$paymentMethodId]['banks'];
         }
         return array();
-
     }
 }

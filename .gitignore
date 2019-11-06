@@ -1,5 +1,4 @@
-nbproject/*
-index.php
-vendor/*
-composer.lock
+samples/config.php
 .idea/*
+vendor/
+composer.lock
